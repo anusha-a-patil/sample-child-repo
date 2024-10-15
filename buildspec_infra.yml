@@ -1,0 +1,36 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - |
+        echo Build started on `date`
+        filename="sample_config_file.txt"
+        file=$CODEBUILD_SRC_DIR/config_files/"${filename}"
+        echo $file
+        echo Printing env variables
+        echo "${env}"
+        echo "${domain}"
+        KEY="${domain}_${env}"
+        echo "${KEY}"
+        VALUE=$(grep "^${KEY}=" "$file" | sed -e "s/^${KEY}=//")
+        if [ -z "$VALUE" ]; then
+        echo "Key '$KEY' not found in $file"
+        else echo "The value for '$KEY' is '$VALUE'"
+        fi
+        cfnfilename="main.yaml"
+        cfnfile=$CODEBUILD_SRC_DIR/cfn/"${cfnfilename}"
+        echo $cfnfile
+        gluedbfilename="glue_database.yaml"
+        gluedbfile=$CODEBUILD_SRC_DIR/cfn/"${gluedbfilename}"
+        echo $gluedbfile
+        aws s3 cp $gluedbfile s3://mycicd-bucket-ap/cicd-files/
+        GlueDBurl=https://s3.amazonaws.com/mycicd-bucket-ap/cicd-files/glue_database.yaml
+        aws cloudformation deploy \
+          --template-file $cfnfile \
+          --stack-name tpg-stack \
+          --parameter-overrides EnvType="${env}" DomainName="${domain}"  GlueDBPath="${GlueDBurl}" \
+          --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+  post_build:
+    commands:
+      - aws cloudformation describe-stack-events --stack-name tpg-stack
+      - echo Build complete
